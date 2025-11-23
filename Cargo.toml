@@ -1,6 +1,9 @@
 [package]
 name = "bump-local"
 version = "0.1.0"
+rust-version = "1.85.1"
 edition = "2024"
 
 [dependencies]
+thread_local = "1.1.9"
+bumpalo = "3.19.0"
