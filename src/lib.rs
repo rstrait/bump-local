@@ -1,3 +1,49 @@
+#![cfg_attr(feature = "allocator_api", feature(allocator_api))]
+
+//! A `Sync + Send` allocator wrapper around [bumpalo](https://docs.rs/bumpalo) using per-thread bump allocators.
+//!
+//! # Examples
+//!
+//! With bumpalo's collections:
+//!
+//! ```
+//! use bump_local::Bump;
+//!
+//! let bump = Bump::new();
+//! // Get the current thread's instance
+//! let local = bump.local();
+//! let mut vec = bumpalo::collections::Vec::new_in(local.as_inner());
+//! vec.push(1);
+//! vec.push(2);
+//! ```
+//!
+//! With stable Rust and `allocator-api2` feature:
+//!
+//! ```rust,ignore
+//! use allocator_api2::vec::Vec;
+//! use bump_local::Bump;
+//!
+//! let bump = Bump::new();
+//! let mut vec = Vec::new_in(bump.clone());
+//! vec.push(1);
+//! vec.push(2);
+//! ```
+//!
+//! With nightly Rust and `allocator_api` feature:
+//!
+//! ```rust,ignore
+//! #![feature(allocator_api)]
+//!
+//! use bump_local::Bump;
+//!
+//! let bump = Bump::new();
+//! let mut vec = Vec::new_in(bump.clone());
+//! vec.push(1);
+//! vec.push(2);
+//! ```
+
+extern crate alloc;
+
 use std::{
     cell::UnsafeCell,
     sync::{
@@ -10,6 +56,12 @@ use thread_local::ThreadLocal;
 
 mod error;
 pub use error::ResetError;
+
+#[cfg(any(feature = "allocator_api", feature = "allocator-api2"))]
+mod alloc_api;
+
+#[cfg(any(feature = "allocator_api", feature = "allocator-api2"))]
+pub use alloc_api::Allocator;
 
 struct ThreadGuard {
     alive: Arc<AtomicBool>,
@@ -35,19 +87,19 @@ thread_local! {
 
 /// A thread-safe bump allocator that provides `Sync + Send` semantics.
 ///
-/// Each thread gets its own `BumpLocal` instance.
+/// Each thread gets its own [`BumpLocal`] instance.
 #[derive(Default, Clone)]
 pub struct Bump {
     inner: Arc<BumpInner>,
 }
 
 impl Bump {
-    /// Creates a new empty `Bump` allocator.
+    /// Creates a new [`Bump`] allocator.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Returns a builder for configuring a `Bump` allocator.
+    /// Returns a [`BumpBuilder`] for configuring a [`Bump`] allocator.
     ///
     /// # Examples
     ///
@@ -63,11 +115,13 @@ impl Bump {
         BumpBuilder::new()
     }
 
-    /// Returns the allocator for the current thread,
+    /// Returns the [`BumpLocal`] for the current thread,
     /// or creates it if it doesn't exist.
     ///
-    /// If the `reset_all` was called earlier,
+    /// If [`reset_all`] was called earlier,
     /// this would reset the current thread's allocator which is O(1).
+    ///
+    /// [`reset_all`]: Self::reset_all
     #[inline]
     pub fn local(&self) -> &BumpLocal {
         self.inner.local()
@@ -77,9 +131,10 @@ impl Bump {
     ///
     /// # Safety Contract
     ///
-    /// - At the moment of reset it must be the only handle to the Bump.
-    /// - Like `bumpalo::Bump::reset()`, callers must ensure no references to allocated memory
-    ///   are used after calling this method.
+    /// - At the moment of reset it must be the only handle to the [`Bump`].
+    /// - Like [`bumpalo::Bump::reset()`], callers must ensure no references to allocated memory
+    ///   a
+    ///   jre used after calling this method.
     /// - This does not run any `Drop` implementations.
     #[inline]
     pub fn reset_all(&mut self) -> Result<(), ResetError> {
@@ -93,7 +148,7 @@ impl Bump {
     }
 }
 
-/// Builder for configuring a `Bump` allocator.
+/// Builder for configuring a [`Bump`] allocator.
 #[derive(Default)]
 pub struct BumpBuilder {
     threads_capacity: Option<usize>,
@@ -102,7 +157,7 @@ pub struct BumpBuilder {
 }
 
 impl BumpBuilder {
-    /// Creates a new `BumpBuilder` with default configuration.
+    /// Creates a new [`BumpBuilder`] with default configuration.
     pub fn new() -> Self {
         Self::default()
     }
@@ -133,7 +188,7 @@ impl BumpBuilder {
         self
     }
 
-    /// Builds the `Bump` allocator with the configured parameters.
+    /// Builds the [`Bump`] allocator with the configured parameters.
     pub fn build(self) -> Bump {
         Bump {
             inner: Arc::new(BumpInner {
@@ -166,26 +221,6 @@ impl BumpLocal {
         }
     }
 
-    #[inline]
-    pub fn needs_init(&self) -> bool {
-        // SAFETY: ThreadLocal ensures single-thread access to this BumpLocal.
-        unsafe { (*self.inner.get()).is_none() }
-    }
-
-    #[cold]
-    pub fn init(&self, capacity: usize, limit: Option<usize>, thread_alive: Arc<AtomicBool>) {
-        let bump = bumpalo::Bump::with_capacity(capacity);
-        bump.set_allocation_limit(limit);
-
-        // SAFETY: ThreadLocal ensures single-thread access to this BumpLocal.
-        unsafe {
-            *self.inner.get() = Some(BumpLocalInner {
-                inner: bump,
-                thread_alive,
-            })
-        }
-    }
-
     /// Returns a reference to the underlying `bumpalo::Bump` allocator.
     ///
     /// The returned reference provides access to all `bumpalo::Bump` allocation methods.
@@ -199,12 +234,38 @@ impl BumpLocal {
         unsafe { &(*self.inner.get()).as_ref().unwrap().inner }
     }
 
-    /// Resets the allocator.
+    /// Resets the allocator, deallocating all previously allocated memory.
+    ///
+    /// # Note
+    ///
+    /// - This does not run any `Drop` implementations.
+    /// - Like [`bumpalo::Bump::reset()`], callers must ensure no references to allocated memory
+    ///   are used after calling this method.
     #[inline]
     pub fn reset(&self) {
         // SAFETY: ThreadLocal ensures single-thread access to this BumpLocal.
         unsafe {
             (*self.inner.get()).as_mut().unwrap().inner.reset();
+        }
+    }
+
+    #[inline]
+    fn needs_init(&self) -> bool {
+        // SAFETY: ThreadLocal ensures single-thread access to this BumpLocal.
+        unsafe { (*self.inner.get()).is_none() }
+    }
+
+    #[cold]
+    fn init(&self, capacity: usize, limit: Option<usize>, thread_alive: Arc<AtomicBool>) {
+        let bump = bumpalo::Bump::with_capacity(capacity);
+        bump.set_allocation_limit(limit);
+
+        // SAFETY: ThreadLocal ensures single-thread access to this BumpLocal.
+        unsafe {
+            *self.inner.get() = Some(BumpLocalInner {
+                inner: bump,
+                thread_alive,
+            })
         }
     }
 

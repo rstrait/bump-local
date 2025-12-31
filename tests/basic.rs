@@ -68,14 +68,16 @@ macro_rules! broadcast_send {
 fn reset_all() {
     let mut bump = Bump::builder().bump_capacity(100).build();
 
-    let mut threads = Vec::<JoinHandle<()>>::new();
-    let next_bumps = broadcast_new!(Bump);
-    let ready_for_next = wg_new!(3);
-    for layout in [
+    let layouts = [
         Layout::new::<i8>(),
         Layout::new::<i16>(),
         Layout::new::<i32>(),
-    ] {
+    ];
+
+    let mut threads = Vec::<JoinHandle<()>>::with_capacity(layouts.len());
+    let next_bumps = broadcast_new!(Bump);
+    let ready_for_next = wg_new!(layouts.len());
+    for layout in layouts {
         let next_bumps = next_bumps.clone();
         let ready_for_next = ready_for_next.clone();
         let bump = bump.clone();
@@ -116,14 +118,16 @@ fn reset_all() {
 fn local_reuse() {
     let bump = Bump::builder().bump_capacity(100).build();
 
-    let mut threads = Vec::<JoinHandle<()>>::new();
-    let next_bumps = broadcast_new!(Bump);
-    let ready_for_next = wg_new!(3);
-    for layout in [
+    let layouts = [
         Layout::new::<i8>(),
         Layout::new::<i16>(),
         Layout::new::<i32>(),
-    ] {
+    ];
+
+    let mut threads = Vec::<JoinHandle<()>>::with_capacity(layouts.len());
+    let next_bumps = broadcast_new!(Bump);
+    let ready_for_next = wg_new!(layouts.len());
+    for layout in layouts {
         let next_bumps = next_bumps.clone();
         let ready_for_next = ready_for_next.clone();
         let bump = bump.clone();

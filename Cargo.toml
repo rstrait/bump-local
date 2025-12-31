@@ -1,9 +1,40 @@
 [package]
 name = "bump-local"
 version = "0.1.0"
-rust-version = "1.85.1"
 edition = "2024"
+rust-version = "1.85.1"
+documentation = "https://docs.rs/bump-local"
+readme = "README.md"
+repository = "https://github.com/rstrait/bump-local"
+license = "MIT OR Apache-2.0"
+exclude = [".github/"]
+keywords = ["allocator", "bump", "arena", "thread-safe"]
+categories = ["memory-management"]
+description = """
+A thread-safe bump allocator backed by bumpalo crate.
+"""
+
+[package.metadata.docs.rs]
+all-features = true
+
+[features]
+default = []
+allocator_api = ["bumpalo/allocator_api"]
+allocator-api2 = ["dep:allocator-api2", "bumpalo/allocator-api2"]
+
+[dependencies.allocator-api2]
+version = "0.2.8"
+optional = true
+default-features = false
 
 [dependencies]
 thread_local = "1.1.9"
-bumpalo = "3.19.0"
+bumpalo = { version = "3.19.0", default-features = false }
+
+[dev-dependencies]
+rayon = "1.11.0"
+bumpalo = { version = "3.19.0", features = ["collections"] }
+
+[[example]]
+name = "nightly"
+required-features = ["allocator_api"]
