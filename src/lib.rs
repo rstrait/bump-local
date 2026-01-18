@@ -133,8 +133,7 @@ impl Bump {
     ///
     /// - At the moment of reset it must be the only handle to the [`Bump`].
     /// - Like [`bumpalo::Bump::reset()`], callers must ensure no references to allocated memory
-    ///   a
-    ///   jre used after calling this method.
+    ///   are used after calling this method.
     /// - This does not run any `Drop` implementations.
     #[inline]
     pub fn reset_all(&mut self) -> Result<(), ResetError> {
