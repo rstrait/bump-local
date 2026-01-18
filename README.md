@@ -1,4 +1,9 @@
-# `bump-local`
+# bump-local &emsp; [![crates-badge]][crates.io] [![docs-badge]][docs.rs]
+
+[crates-badge]: https://img.shields.io/crates/v/bump-local.svg
+[crates.io]: https://crates.io/crates/bump-local
+[docs-badge]: https://docs.rs/bump-local/badge.svg
+[docs.rs]: https://docs.rs/bump-local
 
 A `Sync + Send` allocator wrapper around [bumpalo](https://docs.rs/bumpalo) using per-thread bump allocators.
 
