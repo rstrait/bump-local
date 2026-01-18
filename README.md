@@ -33,6 +33,14 @@ bump.reset_all().unwrap();
 
 Check out the [examples](examples/) directory for examples using rayon and bumpalo collections.
 
+## Limitations
+
+Resetting all allocators requires exclusive access to the `Bump`.
+
+This library is designed for the fork-join model, where you allocate during parallel work and reset between phases.
+
+Future versions may add a generation-based resetting option to avoid the exclusive access requirement.
+
 ## Minimum Supported Rust Version (MSRV)
 
 This crate requires Rust 1.71.1 or later.
